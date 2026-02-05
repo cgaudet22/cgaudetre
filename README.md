@@ -1,41 +1,39 @@
-# Pipeline Specification
+# SleepyServerBot One-File Workflow
 
-## TTS
+This repository provides a single script, `workflow_one_file.py`, that runs the full pipeline:
 
-When a segment fails TTS generation, the system MUST generate fallback silence with a deterministic duration per failed segment.
+1. Google Sheets input
+2. DeepSeek script generation
+3. Pollinations image generation
+4. Inworld TTS generation
+5. FFmpeg media assembly
+6. Optional YouTube upload
 
-### Fallback silence duration derivation
+## Usage
 
-1. **Preferred method (required first attempt):**
-   - Estimate the segment duration from the segment's word count and the target narration rate for the selected voice model.
-   - Use a deterministic calculation so repeated runs produce the same fallback duration for identical input.
-   - Example formula:
-     - `target_seconds = word_count / words_per_second_for_selected_voice`
-   - Clamp to configured minimum/maximum segment duration bounds if defined by pipeline settings.
+### 1) Install dependencies
 
-2. **Alternate method (required second attempt before silence):**
-   - Attempt backup narration through a configured secondary TTS provider.
-   - If backup narration succeeds, use that generated narration audio and skip silence fallback for that segment.
-   - If backup narration fails, use silence with duration computed from the preferred method above.
+```bash
+pip install google-auth google-auth-oauthlib google-auth-httplib2 gspread google-api-python-client requests python-dotenv
+```
 
-### Segment manifest requirements
+### 2) Configure environment
 
-Before concatenation, the pipeline MUST write a segment manifest file with one record per segment, including at least:
+Copy `.env.example` to `.env` and fill required values.
 
-- `segment_index`
-- `text_length` (character count)
-- `target_seconds` (planned segment duration)
-- `actual_audio_seconds` (measured duration of generated audio, backup audio, or silence)
+### 3) Run
 
-The manifest MAY be JSON or CSV, but it MUST be deterministic and reproducible for the same input ordering.
+```bash
+python workflow_one_file.py --dry-run --short-run
+python workflow_one_file.py
+```
 
-### Pre-mux validation requirements
+## Flags
 
-Before final muxing, the pipeline MUST validate total timeline length using the segment manifest:
+- `--dry-run` / `--skip-upload`: run entire workflow except YouTube upload.
+- `--short-run`: fewer segments/images for quicker validation.
 
-1. Sum all `actual_audio_seconds` from concatenated segment outputs.
-2. Compare this sum against the expected concatenated output duration (within configured tolerance).
-3. Fail fast (and log a validation error) if the difference exceeds tolerance.
-4. Proceed to final muxing only when validation passes.
+## Requirements
 
-These checks ensure predictable sync behavior even when one or more segments rely on fallback silence.
+- FFmpeg available on PATH.
+- Valid credentials and API keys for configured integrations.
